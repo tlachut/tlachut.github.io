@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pl">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Nauka z powtórkami</title>
+        <link rel="stylesheet" href="styles.css" />
+        <link href="https://unpkg.com/filepond/dist/filepond.css" rel="stylesheet" />
+        <script src="https://unpkg.com/filepond/dist/filepond.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>Nauka z powtórkami</h1>
+                <button id="settingsBtn" class="btn btn-secondary">Ustawienia</button>
+            </header>
+            <main>
+                <section class="controls">
+                    <button id="addAudioBtn" class="btn btn-primary">Dodaj plik dźwiękowy</button>
+                    <div class="search-filter-sort">
+                        <input type="text" id="searchInput" placeholder="Szukaj..." class="search-input" />
+                        <select id="subjectFilter" class="select">
+                            <option value="">Wszystkie przedmioty</option>
+                        </select>
+                        <select id="sortBy" class="select">
+                            <option value="date">Sortuj po dacie dodania</option>
+                            <option value="title">Sortuj po tytule</option>
+                            <option value="nextRepetition">Sortuj po dacie powtórki</option>
+                        </select>
+                    </div>
+                </section>
+                <section id="addAudioForm" class="add-audio-form" style="display: none">
+                    <h2>Dodaj nowy plik audio</h2>
+                    <form id="audioForm">
+                        <input type="file" class="filepond" name="audioFile" accept="audio/*" required />
+                        <input type="text" id="audioTitle" placeholder="Tytuł" required />
+                        <select id="audioSubject" required>
+                            <option value="">Wybierz przedmiot</option>
+                            <option value="new">Dodaj nowy przedmiot</option>
+                        </select>
+                        <input type="text" id="newSubject" placeholder="Nowy przedmiot" style="display: none" />
+                        <select id="audioChapter" required>
+                            <option value="">Wybierz rozdział</option>
+                            <option value="new">Dodaj nowy rozdział</option>
+                        </select>
+                        <input type="text" id="newChapter" placeholder="Nowy rozdział" style="display: none" />
+                        <button type="submit" class="btn btn-primary">Dodaj</button>
+                        <button type="button" id="cancelAdd" class="btn btn-secondary">Anuluj</button>
+                    </form>
+                </section>
+                <section id="settingsPanel" class="settings-panel" style="display: none">
+                    <h2>Ustawienia</h2>
+                    <div class="settings-content">
+                        <h3>Statystyki nauki</h3>
+                        <div id="statsContent"></div>
+                        <h3>Eksport/Import danych</h3>
+                        <button id="exportDataBtn" class="btn btn-primary">Eksportuj dane</button>
+                        <button id="importDataBtn" class="btn btn-primary">Importuj dane</button>
+                        <input type="file" id="importDataInput" style="display: none" accept=".json" />
+                    </div>
+                    <button id="closeSettingsBtn" class="btn btn-secondary">Zamknij ustawienia</button>
+                </section>
+                <section id="fileList" class="file-list"></section>
+            </main>
+            <footer>
+                <p>© 2024 Nauka z powtórkami</p>
+            </footer>
+        </div>
+        <script src="script.js"></script>
+    </body>
+</html>
