@@ -4,6 +4,13 @@ let audioDataCache = localforage.createInstance({
     name: "audioData",
 });
 let isUpdatingDisplay = false;
+const metadataStore = localforage.createInstance({
+    name: "audioMetadata",
+});
+
+const audioDataStore = localforage.createInstance({
+    name: "audioData",
+});
 
 const intervals = [
     { name: "1 dzień", value: 24 * 60 * 60 * 1000 },
@@ -48,7 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         labelFileProcessingComplete: "Plik audio gotowy",
     });
 
-    await loadFromLocalStorage();
+    await loadFromIndexedDB();
     await migrateDataToIndexedDB();
 
     // Inicjalizacja eventListenerów i pozostałych funkcji
@@ -187,7 +194,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         };
                     });
                     subjects = importedData.subjects;
-                    saveToLocalStorage();
+                    saveToIndexedDB();
                     updateSubjectFilter();
                     updateSubjectSelect();
                     updateDisplay();
@@ -287,11 +294,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.log("Nowy plik:", newFile);
 
             try {
-                await audioDataCache.setItem(newFile.id.toString(), compressedAudioData);
+                await audioDataStore.setItem(newFile.id.toString(), compressedAudioData);
                 console.log("Dane audio zapisane w IndexedDB");
 
                 audioFiles.push(newFile);
-                saveToLocalStorage();
+                await saveToIndexedDB();
                 updateSubjectFilter();
                 updateDisplay();
                 updateStatistics();
@@ -308,26 +315,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("Rozpoczęcie renderowania pliku:", file.id);
         const fileItem = document.createElement("div");
         fileItem.className = "file-item";
-        fileItem.dataset.fileId = file.id; // Dodajemy unikalny identyfikator do elementu DOM
+        fileItem.dataset.fileId = file.id;
 
         try {
-            const audioData = await audioDataCache.getItem(file.id.toString());
+            const audioData = await audioDataStore.getItem(file.id.toString());
+            if (!audioData) {
+                throw new Error("Dane audio niedostępne");
+            }
             fileItem.innerHTML = `
                 <h3>${file.title}</h3>
                 <p>${file.chapter}, ${file.subject}</p>
                 <p>Data dodania: ${formatDate(file.addedDate)}</p>
                 <p class="first-listen-date">Data pierwszego odsłuchania: ${file.firstListenDate ? formatDate(file.firstListenDate) : "Jeszcze nie odsłuchano"}</p>
                 <p class="next-repetition">Następne powtórzenie: ${getNextRepetitionText(file)}</p>
-                ${
-                    audioData
-                        ? `
-                    <audio controls>
-                        <source src="${audioData}" type="audio/mpeg">
-                        Twoja przeglądarka nie obsługuje elementu audio.
-                    </audio>
-                `
-                        : "<p>Dane audio niedostępne</p>"
-                }
+                <audio controls>
+                    <source src="${audioData}" type="audio/mpeg">
+                    Twoja przeglądarka nie obsługuje elementu audio.
+                </audio>
                 <button class="btn btn-primary review-btn" data-id="${file.id}">Oznacz jako przesłuchane</button>
                 <button class="btn btn-secondary delete-btn" data-id="${file.id}">Usuń</button>
             `;
@@ -380,7 +384,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 file.nextRepetition = new Date(now.getTime() + intervals[file.currentIntervalIndex].value);
             }
             file.lastReviewedDate = now;
-            saveToLocalStorage();
+            saveToIndexedDB();
             updateFileDisplay(file);
             updateStatistics();
         }
@@ -411,12 +415,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (confirm(confirmMessage)) {
                 audioFiles = audioFiles.filter((f) => f.id !== fileId);
                 try {
-                    await audioDataCache.removeItem(fileId.toString());
+                    await audioDataStore.removeItem(fileId.toString());
                     console.log(`Dane audio dla pliku "${file.title}" zostały usunięte.`);
                 } catch (error) {
                     console.error("Błąd podczas usuwania danych audio:", error);
                 }
-                saveToLocalStorage();
+                await saveToIndexedDB();
                 updateSubjectFilter();
                 updateDisplay();
                 updateStatistics();
@@ -492,43 +496,42 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function saveToLocalStorage() {
-        const audioFilesMetadata = audioFiles.map(({ id, title, chapter, subject, addedDate, firstListenDate, nextRepetition, currentIntervalIndex, lastReviewedDate }) => ({ id, title, chapter, subject, addedDate, firstListenDate, nextRepetition, currentIntervalIndex, lastReviewedDate }));
-        localStorage.setItem("audioFilesMetadata", JSON.stringify(audioFilesMetadata));
-        localStorage.setItem("subjects", JSON.stringify(subjects));
-        console.log("Dane zapisane w localStorage");
+    async function saveToIndexedDB() {
+        console.log("Zapisywanie danych do IndexedDB");
+        try {
+            await metadataStore.setItem("audioFiles", audioFiles);
+            await metadataStore.setItem("subjects", subjects);
+            console.log("Dane zapisane w IndexedDB");
+        } catch (error) {
+            console.error("Błąd podczas zapisywania danych do IndexedDB:", error);
+        }
     }
 
-    async function loadFromLocalStorage() {
-        console.log("Rozpoczęcie ładowania danych z localStorage");
-        const savedFilesMetadata = localStorage.getItem("audioFilesMetadata");
-        const savedSubjects = localStorage.getItem("subjects");
-        console.log("Zapisane metadane:", savedFilesMetadata);
-        console.log("Zapisane przedmioty:", savedSubjects);
+    async function loadFromIndexedDB() {
+        console.log("Rozpoczęcie ładowania danych z IndexedDB");
+        try {
+            const savedFiles = await metadataStore.getItem("audioFiles");
+            const savedSubjects = await metadataStore.getItem("subjects");
 
-        if (savedFilesMetadata) {
-            audioFiles = JSON.parse(savedFilesMetadata);
-            audioFiles.forEach((file) => {
-                file.addedDate = new Date(file.addedDate);
-                file.firstListenDate = file.firstListenDate ? new Date(file.firstListenDate) : null;
-                file.nextRepetition = file.nextRepetition ? new Date(file.nextRepetition) : null;
-                file.lastReviewedDate = file.lastReviewedDate ? new Date(file.lastReviewedDate) : null;
-            });
-        } else {
-            console.log("Brak zapisanych metadanych");
+            if (savedFiles) {
+                audioFiles = savedFiles.map((file) => ({
+                    ...file,
+                    addedDate: new Date(file.addedDate),
+                    firstListenDate: file.firstListenDate ? new Date(file.firstListenDate) : null,
+                    nextRepetition: file.nextRepetition ? new Date(file.nextRepetition) : null,
+                    lastReviewedDate: file.lastReviewedDate ? new Date(file.lastReviewedDate) : null,
+                }));
+            }
+
+            if (savedSubjects) {
+                subjects = savedSubjects;
+            }
+
+            console.log("Załadowane pliki audio:", audioFiles);
+            console.log("Załadowane przedmioty:", subjects);
+        } catch (error) {
+            console.error("Błąd podczas ładowania danych z IndexedDB:", error);
         }
-
-        if (savedSubjects) {
-            subjects = JSON.parse(savedSubjects);
-        }
-
-        console.log("Załadowane pliki audio:", audioFiles);
-        console.log("Załadowane przedmioty:", subjects);
-
-        updateSubjectFilter();
-        updateSubjectSelect();
-        updateDisplay();
-        updateStatistics();
     }
 
     function cleanupUnusedAudioData() {
@@ -540,7 +543,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
     }
-    
+
     function updateDisplay() {
         if (isUpdatingDisplay) {
             console.log("Aktualizacja wyświetlania już w toku, pomijam...");
@@ -603,7 +606,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     updateStatistics();
-    loadFromLocalStorage();
+    loadFromIndexedDB();
 
     async function migrateDataToIndexedDB() {
         const oldSavedFiles = localStorage.getItem("audioFiles");
@@ -622,7 +625,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
             }
             localStorage.removeItem("audioFiles");
-            saveToLocalStorage();
+            saveToIndexedDB();
             console.log("Migracja zakończona.");
         }
     }
